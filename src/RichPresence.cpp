@@ -7,7 +7,7 @@ void RichPresence::Load()
 {
 	CSimpleIniA ini;
 	ini.SetUnicode();
-	ini.LoadFile(L"Data\\SKSE\\Plugins\\RichPresence.ini");
+	ini.LoadFile(L"Data\\SKSE\\Plugins\\DiscordRichPresence.ini");
 
 	applicationID = ini.GetValue("Application", "ApplicationID", "1074109506675544146");
 
@@ -338,7 +338,7 @@ void RichPresence::UpdateFlavour()
 			flavour += "Waiting";
 		}
 		else if (ui->IsMenuOpen(RE::StatsMenu::MENU_NAME)) {
-			flavour += "Looking at skills";
+			flavour += "In the skills menu";
 		}
 		else if (ui->IsMenuOpen(RE::TitleSequenceMenu::MENU_NAME)) {
 			flavour += "Started a new game";

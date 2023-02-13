@@ -8,7 +8,6 @@
 constexpr auto steamAppID = "72850";
 constexpr auto markerMinDistance = 8192;
 constexpr auto markerMinDistanceHalf = markerMinDistance / 2;
-constexpr auto markerMinDistanceQuarter = markerMinDistance / 4;
 
 class RichPresence
 {

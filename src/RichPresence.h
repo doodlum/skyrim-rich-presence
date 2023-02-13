@@ -93,6 +93,9 @@ public:
 	bool dataLoaded = false;
 	RE::TESObjectSTAT* markerBase = nullptr;
 	RE::TESForm* defaultWorldSpace = nullptr;
+	RE::TESQuest* unboundQuest = nullptr;
+
+	bool mainMenu = true;
 
 	void DataLoaded();
 
@@ -108,7 +111,7 @@ public:
 	std::shared_mutex flavourLock;
 	std::string       flavour;
 
-	const char* GetCurrentWorldSpaceName();
+	const char* GetCurrentWorldSpaceName(std::string exclude = "");
 
 	void UpdateMarker();
 	void UpdateFlavour();
@@ -118,10 +121,12 @@ public:
 	std::string applicationID = "1074109506675544146";
 
 	std::string largeImageKey = "logo";
-	std::string largeImageText = "The Elder Scrolls V: Skyrim";
+	std::string largeImageText = "Skyrim Special Edition";
 
 	std::string smallImageKey = "";
 	std::string smallImageText = "";
+
+	bool skipUnbound = false;
 
 	float delay = 0;
 

@@ -9,13 +9,15 @@ void RichPresence::Load()
 	ini.SetUnicode();
 	ini.LoadFile(L"Data\\SKSE\\Plugins\\RichPresence.ini");
 
-	applicationID = ini.GetValue("Settings", "ApplicationID", "1074109506675544146");
+	applicationID = ini.GetValue("Application", "ApplicationID", "1074109506675544146");
 
-	largeImageKey = ini.GetValue("Settings", "LargeImageKey", "logo");
-	largeImageText = ini.GetValue("Settings", "LargeImageText", "The Elder Scrolls V: Skyrim");
+	largeImageKey = ini.GetValue("Default", "LargeImageKey", "legendary");
+	largeImageText = ini.GetValue("Default", "LargeImageText", "Skyrim Special Edition");
 
-	smallImageKey = ini.GetValue("Settings", "SmallImageKey", "");
-	smallImageText = ini.GetValue("Settings", "SmallImageText", "");
+	smallImageKey = ini.GetValue("Default", "SmallImageKey", "");
+	smallImageText = ini.GetValue("Default", "SmallImageText", "");
+
+	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
 }
 
 bool PlayerIsInInterior()
@@ -33,10 +35,11 @@ void RichPresence::DataLoaded()
 	markerBase = RE::TESForm::LookupByID(0x10)->As<RE::TESObjectSTAT>();
 	auto sMapWorldDefaultWorldSpace = RE::GetINISetting("sMapWorldDefaultWorldSpace:MapMenu");
 	defaultWorldSpace = RE::TESForm::LookupByEditorID(sMapWorldDefaultWorldSpace->GetString());
+	unboundQuest = RE::TESForm::LookupByEditorID("MQ101")->As<RE::TESQuest>();
 	dataLoaded = true;
 }
 
-const char* RichPresence::GetCurrentWorldSpaceName()
+const char* RichPresence::GetCurrentWorldSpaceName(std::string exclude)
 {
 	if (auto tes = RE::TES::GetSingleton()) {
 		auto cached = RE::TES::GetSingleton()->worldSpace;
@@ -45,7 +48,7 @@ const char* RichPresence::GetCurrentWorldSpaceName()
 		}
 		for (auto worldSpace = cached; worldSpace; worldSpace = worldSpace->parentWorld) {
 			auto worldSpaceName = worldSpace->GetName();
-			if (worldSpaceName) {
+			if (worldSpaceName && strcmp(worldSpaceName, exclude.c_str()) != 0) {
 				return worldSpaceName;
 			}
 		}
@@ -55,7 +58,6 @@ const char* RichPresence::GetCurrentWorldSpaceName()
 
 void RichPresence::UpdateMarker()
 {
-	auto startTime = std::chrono::system_clock::now();
 	std::lock_guard<std::shared_mutex> lk(markerLock);
 	type = Marker::None;
 	closestDistance = FLT_MAX;
@@ -144,9 +146,6 @@ void RichPresence::UpdateMarker()
 		cachedLocation = GetCurrentWorldSpaceName();
 		inLocation = true;
 	}
-
-	auto endTime = std::chrono::system_clock::now();
-	logger::info("Marker update took {} microseconds", std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime).count());
 }
 
 void RichPresence::UpdateFlavour()
@@ -164,6 +163,7 @@ void RichPresence::UpdateFlavour()
 	}
 
 	if (auto ui = RE::UI::GetSingleton()) {
+		mainMenu = false;
 		if (ui->IsMenuOpen(RE::BarterMenu::MENU_NAME)) {
 			bool named = false;
 			if (auto ref = RE::TESObjectREFR::LookupByHandle(RE::BarterMenu::GetTargetRefHandle())) {
@@ -279,8 +279,30 @@ void RichPresence::UpdateFlavour()
 		else if (ui->IsMenuOpen(RE::LockpickingMenu::MENU_NAME)) {
 			bool named = false;
 			if (auto ref = RE::LockpickingMenu::GetTargetReference()) {
+				std::string level = "Unlocked";
+				switch (ref->GetLockLevel())
+				{
+				case RE::LOCK_LEVEL::kVeryEasy:
+					level = "Very Easy";
+					break;
+				case RE::LOCK_LEVEL::kEasy:
+					level = "Easy";
+					break;
+				case RE::LOCK_LEVEL::kAverage:
+					level = "Average";
+					break;
+				case RE::LOCK_LEVEL::kHard:
+					level = "Hard";
+					break;
+				case RE::LOCK_LEVEL::kVeryHard:
+					level = "Very Hard";
+					break;
+				case RE::LOCK_LEVEL::kRequiresKey:
+					level = "Requires Key";
+					break;
+				}
 				if (auto name = ref->GetName()) {
-					flavour += std::format("Lockpicking {}", name);
+					flavour += std::format("Lockpicking {} ({})", name, level);
 					named = true;
 				}
 			}
@@ -294,6 +316,7 @@ void RichPresence::UpdateFlavour()
 		}
 		else if (ui->IsMenuOpen(RE::MainMenu::MENU_NAME)) {
 			flavour += "On the main menu";
+			mainMenu = true;
 		}
 		else if (ui->IsMenuOpen(RE::MapMenu::MENU_NAME)) {
 			flavour += "Looking at the map";
@@ -318,7 +341,8 @@ void RichPresence::UpdateFlavour()
 			flavour += "Looking at skills";
 		}
 		else if (ui->IsMenuOpen(RE::TitleSequenceMenu::MENU_NAME)) {
-			flavour += "On the main menu";
+			flavour += "Started a new game";
+			mainMenu = true;
 		}
 		else if (ui->IsMenuOpen(RE::TutorialMenu::MENU_NAME)) {
 			flavour += "Reading a tutorial";
@@ -326,14 +350,20 @@ void RichPresence::UpdateFlavour()
 		else if (ui->IsMenuOpen(RE::TweenMenu::MENU_NAME)) {
 			flavour += "In a menu";
 		}
-		else if (speaker) {
-			if (auto name = speaker->GetName()) {
-				if (ui->IsMenuOpen(RE::TrainingMenu::MENU_NAME)) {
+		else if (ui->IsMenuOpen(RE::TrainingMenu::MENU_NAME)) {
+			bool named = false;
+			if (speaker) {
+				if (auto name = speaker->GetName()) {
 					flavour += std::format("Training with {}", name);
+					named = true;
 				}
-				else {
-					flavour += std::format("Talking to {}", name);
-				}
+			}
+			if (!named) {
+				flavour += "Training";
+			}
+		} else if (speaker) {
+			if (auto name = speaker->GetName()) {
+				flavour += std::format("Talking to {}", name);
 			}
 			else {
 				flavour += "Talking to someone";
@@ -341,7 +371,12 @@ void RichPresence::UpdateFlavour()
 		}
 	}
 
-	if (!RE::UI::GetSingleton()->GameIsPaused()) {
+	if (!flavour.empty() && iconOverride.empty())
+	{
+		iconOverride = "checkmark";
+	}
+
+	if (flavour.empty()) {
 		if (auto player = RE::PlayerCharacter::GetSingleton()) {
 			if (flavour.empty()) {
 				bool         mounted = false;
@@ -418,7 +453,7 @@ void RichPresence::UpdateFlavour()
 						flavour += std::format(" in {}", cachedLocation);
 					}
 					else {
-						flavour += std::format("In {} within {}", cachedLocation, GetCurrentWorldSpaceName());
+						flavour += std::format("In {} within {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
 					}
 				}
 				else {
@@ -427,7 +462,7 @@ void RichPresence::UpdateFlavour()
 							flavour += std::format(" near {}", cachedLocation);
 						}
 						else {
-							flavour += std::format("Near {} within {}", cachedLocation, GetCurrentWorldSpaceName());
+							flavour += std::format("Near {} in {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
 						}
 					}
 					else {
@@ -435,7 +470,7 @@ void RichPresence::UpdateFlavour()
 							flavour += std::format(" at {}", cachedLocation);
 						}
 						else {
-							flavour += std::format("At {} within {}", cachedLocation, GetCurrentWorldSpaceName());
+							flavour += std::format("At {} in {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
 						}
 					}
 				}
@@ -477,23 +512,26 @@ void RichPresence::Update()
 						cellPtr = currentCell;
 						SKSE::GetTaskInterface()->AddTask([&]() {
 							UpdateMarker();
-						});
+							});
 					}
 				}
 			}
 
 			SKSE::GetTaskInterface()->AddUITask([&]() {
 				UpdateFlavour();
-			});
+				});
 
 			DiscordRichPresence discord_presence;
 			memset(&discord_presence, 0, sizeof(discord_presence));
 			discord_presence.state = flavour.c_str();
-			discord_presence.details = details.c_str();
+			if (!mainMenu && dataLoaded && (skipUnbound || unboundQuest->IsCompleted())) {
+				discord_presence.details = details.c_str();
+			}
+
 			static auto timer = time(nullptr);
 			discord_presence.startTimestamp = timer;
 
-			if (type != Marker::None && type < Marker::Count) {
+			if (type != Marker::None && type < Marker::Count && !mainMenu) {
 				discord_presence.largeImageKey = cachedIcon.c_str();
 			}
 			else {

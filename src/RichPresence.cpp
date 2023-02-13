@@ -18,6 +18,9 @@ void RichPresence::Load()
 	smallImageText = ini.GetValue("Default", "SmallImageText", "");
 
 	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
+
+	defaultExteriorIcon = ini.GetValue("Options", "DefaultExteriorIcon", "grove");
+	defaultInteriorIcon = ini.GetValue("Options", "DefaultInteriorIcon", "settlement");
 }
 
 bool PlayerIsInInterior()
@@ -72,7 +75,7 @@ void RichPresence::DataLoaded()
 	dataLoaded = true;
 }
 
-const char* RichPresence::GetCurrentWorldSpaceName(std::string exclude)
+std::string RichPresence::GetCurrentWorldSpaceName(std::string exclude)
 {
 	if (auto tes = RE::TES::GetSingleton()) {
 		auto cached = RE::TES::GetSingleton()->worldSpace;
@@ -86,7 +89,7 @@ const char* RichPresence::GetCurrentWorldSpaceName(std::string exclude)
 			}
 		}
 	}
-	return nullptr;
+	return std::string();
 }
 
 void RichPresence::UpdateMarker()
@@ -202,6 +205,18 @@ void RichPresence::UpdateMarker()
 		cachedIcon = magic_enum::enum_name(type).data();
 		std::transform(cachedIcon.begin(), cachedIcon.end(), cachedIcon.begin(),
 			[](unsigned char c) { return (char)std::tolower(c); });
+	}
+	else if (auto player = RE::PlayerCharacter::GetSingleton())
+	{
+		if (auto cell = player->GetParentCell())
+		{
+			if (cell->IsInteriorCell())
+			{
+				cachedIcon = defaultInteriorIcon;
+			} else{
+				cachedIcon = defaultExteriorIcon;
+			}
+		}
 	}
 
 	if (interior && !locationName.empty() && locationName != worldSpaceName)
@@ -491,6 +506,7 @@ void RichPresence::UpdateFlavour()
 						{
 							flavour = "Fighting";
 						}
+						iconOverride = "enemyclose";
 					}
 					else if (player->IsSneaking()) {
 						flavour = "Sneaking";

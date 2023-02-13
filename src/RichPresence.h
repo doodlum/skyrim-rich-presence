@@ -103,6 +103,8 @@ public:
 
 	void DataLoaded();
 
+	std::string GetCurrentWorldSpaceName(std::string exclude = "");
+
 	bool              markerUpdate = false;
 	std::shared_mutex markerLock;
 	std::string       markerName = "";
@@ -116,8 +118,6 @@ public:
 	std::shared_mutex flavourLock;
 	std::string       flavour;
 
-	const char* GetCurrentWorldSpaceName(std::string exclude = "");
-
 	void UpdateMarker();
 	void UpdateFlavour();
 
@@ -130,6 +130,9 @@ public:
 
 	std::string smallImageKey = "";
 	std::string smallImageText = "";
+
+	std::string defaultExteriorIcon = "grove";
+	std::string defaultInteriorIcon = "settlement";
 
 	bool skipUnbound = false;
 
@@ -147,7 +150,9 @@ public:
 			static void thunk()
 			{
 				func();
-				GetSingleton()->Update();
+				if (GetSingleton()->dataLoaded) {
+					GetSingleton()->Update();
+				}
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
 		};

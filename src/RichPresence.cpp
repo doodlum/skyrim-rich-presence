@@ -52,12 +52,13 @@ void RichPresence::CacheMapMarkers()
 					else {
 						logger::debug("Marker {} Unknown", marker->mapData->type.underlying());
 					}
-					mapMarkers.emplace_back(&a_ref);
+					if (marker->mapData->type.underlying() < 59) {
+						mapMarkerCache.insert({ &a_ref, (Marker)marker->mapData->type.underlying()});
+					}
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
 				});
 		}
-		mapMarkerCache.insert({ worldSpace , mapMarkers });
 	}
 }
 
@@ -154,33 +155,44 @@ void RichPresence::UpdateMarker()
 				else {
 					logger::debug("Searching Unknown World Space");
 				}
-				for (auto& ref : mapMarkerCache[worldSpace]) {
-					if (auto marker = ref->extraList.GetByType<RE::ExtraMapMarker>()) {
-						auto distance = ref->GetPosition().GetDistance(position);
-						if (auto name = marker->mapData->locationName.GetFullName()) {
-							logger::debug("Testing Marker {:X} {} {} | Distance {} | Position {} {} {}", ref->GetFormID(), marker->mapData->type.underlying(), name, distance, ref->GetPosition().x, ref->GetPosition().y, ref->GetPosition().z);
-						}
-						else {
-							logger::debug("Testing Marker {:X} {} Unknown | Distance {} | Position {} {} {}", ref->GetFormID(), marker->mapData->type.underlying(), distance, ref->GetPosition().x, ref->GetPosition().y, ref->GetPosition().z);
-						}
-						if (distance < closestDistance && distance < markerMinDistance && marker->mapData->flags.any(RE::MapMarkerData::Flag::kVisible)){
-							logger::debug("Shorter than distance {} from {}", closestDistance, markerName);
-							closestDistance = distance;
-							if (marker->mapData->type.underlying() < 59) {
-								type = (Marker)marker->mapData->type.underlying();
+				while (worldSpace && type == Marker::None) {
+					worldSpace->persistentCell->ForEachReferenceInRange(position, markerMinDistance, [&](RE::TESObjectREFR& a_ref) {
+						if (a_ref.GetBaseObject() == markerBase) {
+							if (auto marker = a_ref.extraList.GetByType<RE::ExtraMapMarker>()) {
+								auto distance = a_ref.GetPosition().GetDistance(position);
+								if (auto name = marker->mapData->locationName.GetFullName()) {
+									logger::debug("Testing Marker {:X} {} {} | Distance {} | Position {} {} {}", a_ref.GetFormID(), marker->mapData->type.underlying(), name, distance, a_ref.GetPosition().x, a_ref.GetPosition().y, a_ref.GetPosition().z);
+								}
+								else {
+									logger::debug("Testing Marker {:X} {} Unknown | Distance {} | Position {} {} {}", a_ref.GetFormID(), marker->mapData->type.underlying(), distance, a_ref.GetPosition().x, a_ref.GetPosition().y, a_ref.GetPosition().z);
+								}
+								if (distance < closestDistance && marker->mapData->flags.any(RE::MapMarkerData::Flag::kVisible)) {
+									logger::debug("Shorter than distance {} from {}", closestDistance, markerName);
+									closestDistance = distance;
+									if (marker->mapData->type.underlying() < 59) {
+										type = (Marker)marker->mapData->type.underlying();
+									}
+									else {
+										auto it = mapMarkerCache.find(&a_ref);
+										if (it != mapMarkerCache.end()){
+											type = (*it).second;
+										}
+										else {
+											type = Marker::Unknown;
+										}
+									}
+									markerName = marker->mapData->locationName.fullName;
+								}
 							}
-							else {
-								type = Marker::Unknown;
-							}
-							markerName = marker->mapData->locationName.fullName;
 						}
+						return RE::BSContainer::ForEachResult::kContinue;
+						});
+					if (worldSpace != worldSpace->parentWorld) {
+						worldSpace = worldSpace->parentWorld;
 					}
-				}
-				if (worldSpace != worldSpace->parentWorld) {
-					worldSpace = worldSpace->parentWorld;
-				}
-				else {
-					worldSpace = nullptr;
+					else {
+						worldSpace = nullptr;
+					}
 				}
 			}
 		}

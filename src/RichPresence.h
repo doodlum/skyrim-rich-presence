@@ -88,7 +88,7 @@ public:
 		Unknown
 	};
 
-	std::unordered_map<void*, std::list<RE::TESObjectREFR*>> mapMarkerCache;
+	std::unordered_map<void*, Marker> mapMarkerCache;
 
 	void CacheMapMarkers();
 

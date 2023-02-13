@@ -6,8 +6,8 @@
 #include <discord-rpc/discord_rpc.h>
 
 constexpr auto steamAppID = "72850";
-constexpr auto markerMinDistance = 8192;
-constexpr auto markerMinDistanceHalf = markerMinDistance / 2;
+constexpr auto markerMinDistance = 16384;
+constexpr auto markerMinDistanceHalf = 4096;
 
 class RichPresence
 {

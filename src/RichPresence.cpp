@@ -361,7 +361,8 @@ void RichPresence::UpdateFlavour()
 			if (!named) {
 				flavour += "Training";
 			}
-		} else if (speaker) {
+		}
+		else if (speaker) {
 			if (auto name = speaker->GetName()) {
 				flavour += std::format("Talking to {}", name);
 			}
@@ -452,8 +453,11 @@ void RichPresence::UpdateFlavour()
 					if (!flavour.empty()) {
 						flavour += std::format(" in {}", cachedLocation);
 					}
+					else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
+						flavour += std::format("In {} within {}", cachedLocation, worldSpace);
+					}
 					else {
-						flavour += std::format("In {} within {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
+						flavour += std::format("In {}", cachedLocation);
 					}
 				}
 				else {
@@ -461,16 +465,22 @@ void RichPresence::UpdateFlavour()
 						if (!flavour.empty()) {
 							flavour += std::format(" near {}", cachedLocation);
 						}
+						else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
+							flavour += std::format("Near {} in {}", cachedLocation, worldSpace);
+						}
 						else {
-							flavour += std::format("Near {} in {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
+							flavour += std::format("Near {}", cachedLocation);
 						}
 					}
 					else {
 						if (!flavour.empty()) {
 							flavour += std::format(" at {}", cachedLocation);
 						}
+						else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
+							flavour += std::format("At {} in {}", cachedLocation, worldSpace);
+						}
 						else {
-							flavour += std::format("At {} in {}", cachedLocation, GetCurrentWorldSpaceName(cachedLocation));
+							flavour += std::format("At {}", cachedLocation);
 						}
 					}
 				}
@@ -503,7 +513,7 @@ void RichPresence::Update()
 					if (auto race = player->GetRace()) {
 						raceName = race->GetName();
 					}
-					details += std::format("{} - {} ({})", player->GetName(), raceName, player->GetLevel());
+					details += std::format("{}, {}, Level {}", player->GetName(), raceName, player->GetLevel());
 
 					static void* cellPtr = nullptr;
 					auto currentCell = player->GetParentCell();;

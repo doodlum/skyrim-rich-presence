@@ -6,7 +6,7 @@
 #include <discord-rpc/discord_rpc.h>
 
 constexpr auto steamAppID = "72850";
-constexpr auto markerMinDistance = 16384;
+constexpr auto markerMinDistance = 8192;
 constexpr auto markerMinDistanceHalf = 4096;
 
 class RichPresence
@@ -87,6 +87,10 @@ public:
 		Count,
 		Unknown
 	};
+
+	std::unordered_map<void*, std::list<RE::TESObjectREFR*>> mapMarkerCache;
+
+	void CacheMapMarkers();
 
 	std::string cachedIcon;
 

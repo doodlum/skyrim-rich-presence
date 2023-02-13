@@ -30,12 +30,44 @@ bool PlayerIsInInterior()
 	return false;
 }
 
+void RichPresence::CacheMapMarkers()
+{
+	auto  dataHandler = RE::TESDataHandler::GetSingleton();
+	auto& worldSpaceArray = dataHandler->GetFormArray<RE::TESWorldSpace>();
+	for (auto& worldSpace : worldSpaceArray)
+	{
+		if (auto name = worldSpace->GetName()) {
+			logger::debug("World Space {}", name);
+		}
+		else {
+			logger::debug("World Space Unknown");
+		}
+		std::list<RE::TESObjectREFR*> mapMarkers;
+		if (worldSpace->persistentCell) {
+			worldSpace->persistentCell->ForEachReference([&](RE::TESObjectREFR& a_ref) {
+				if (auto marker = a_ref.extraList.GetByType<RE::ExtraMapMarker>()) {
+					if (auto name = marker->mapData->locationName.GetFullName()) {
+						logger::debug("Marker {} {}", marker->mapData->type.underlying(), name);
+					}
+					else {
+						logger::debug("Marker {} Unknown", marker->mapData->type.underlying());
+					}
+					mapMarkers.emplace_back(&a_ref);
+				}
+				return RE::BSContainer::ForEachResult::kContinue;
+				});
+		}
+		mapMarkerCache.insert({ worldSpace , mapMarkers });
+	}
+}
+
 void RichPresence::DataLoaded()
 {
 	markerBase = RE::TESForm::LookupByID(0x10)->As<RE::TESObjectSTAT>();
 	auto sMapWorldDefaultWorldSpace = RE::GetINISetting("sMapWorldDefaultWorldSpace:MapMenu");
 	defaultWorldSpace = RE::TESForm::LookupByEditorID(sMapWorldDefaultWorldSpace->GetString());
 	unboundQuest = RE::TESForm::LookupByEditorID("MQ101")->As<RE::TESQuest>();
+	CacheMapMarkers();
 	dataLoaded = true;
 }
 
@@ -67,7 +99,6 @@ void RichPresence::UpdateMarker()
 	RE::TESWorldSpace* cached = nullptr;
 	bool interior = PlayerIsInInterior();
 	if (auto player = RE::PlayerCharacter::GetSingleton()) {
-		cached = player->GetWorldspace();
 		cached = player->GetPlayerRuntimeData().cachedWorldSpace;
 
 		if (!cached) {
@@ -106,32 +137,50 @@ void RichPresence::UpdateMarker()
 		}
 
 		if (type == Marker::None) {
-			auto worldspace = cached;
-			auto position = interior ? player->GetPlayerRuntimeData().exteriorPosition : player->GetPosition();
-			while (worldspace) {
-				worldspace->persistentCell->ForEachReferenceInRange(position, markerMinDistance, [&](RE::TESObjectREFR& a_ref) {
-					if (a_ref.GetBaseObject() == markerBase) {
-						if (auto marker = a_ref.extraList.GetByType<RE::ExtraMapMarker>()) {
-							auto distance = a_ref.GetPosition().GetDistance(player->GetPosition());
-							if (distance < closestDistance) {
-								closestDistance = distance;
-								if (marker->mapData->type.underlying() < 59) {
-									type = (Marker)marker->mapData->type.underlying();
-								}
-								else {
-									type = Marker::Unknown;
-								}
-								markerName = marker->mapData->locationName.fullName;
-							}
-						}
-					}
-					return RE::BSContainer::ForEachResult::kContinue;
-					});
-				if (worldspace != worldspace->parentWorld) {
-					worldspace = worldspace->parentWorld;
+			auto worldSpace = cached;
+			auto position = player->GetPosition();
+			if (interior) {
+				logger::debug("Player is in interior");
+				position = player->GetPlayerRuntimeData().exteriorPosition;
+			}
+			else {
+				logger::debug("Player is not in interior");
+			}
+			logger::debug("Player position is {} {} {}", position.x, position.y, position.z);
+			while (worldSpace && type == Marker::None) {
+				if (auto name = worldSpace->GetName()) {
+					logger::debug("Searching World Space {}", name);
 				}
 				else {
-					worldspace = nullptr;
+					logger::debug("Searching Unknown World Space");
+				}
+				for (auto& ref : mapMarkerCache[worldSpace]) {
+					if (auto marker = ref->extraList.GetByType<RE::ExtraMapMarker>()) {
+						auto distance = ref->GetPosition().GetDistance(position);
+						if (auto name = marker->mapData->locationName.GetFullName()) {
+							logger::debug("Testing Marker {:X} {} {} | Distance {} | Position {} {} {}", ref->GetFormID(), marker->mapData->type.underlying(), name, distance, ref->GetPosition().x, ref->GetPosition().y, ref->GetPosition().z);
+						}
+						else {
+							logger::debug("Testing Marker {:X} {} Unknown | Distance {} | Position {} {} {}", ref->GetFormID(), marker->mapData->type.underlying(), distance, ref->GetPosition().x, ref->GetPosition().y, ref->GetPosition().z);
+						}
+						if (distance < closestDistance && distance < markerMinDistance && marker->mapData->flags.any(RE::MapMarkerData::Flag::kVisible)){
+							logger::debug("Shorter than distance {} from {}", closestDistance, markerName);
+							closestDistance = distance;
+							if (marker->mapData->type.underlying() < 59) {
+								type = (Marker)marker->mapData->type.underlying();
+							}
+							else {
+								type = Marker::Unknown;
+							}
+							markerName = marker->mapData->locationName.fullName;
+						}
+					}
+				}
+				if (worldSpace != worldSpace->parentWorld) {
+					worldSpace = worldSpace->parentWorld;
+				}
+				else {
+					worldSpace = nullptr;
 				}
 			}
 		}

@@ -47,9 +47,9 @@ const char* RichPresence::GetCurrentWorldSpaceName(std::string exclude)
 			cached = defaultWorldSpace->As<RE::TESWorldSpace>();
 		}
 		for (auto worldSpace = cached; worldSpace; worldSpace = worldSpace->parentWorld) {
-			auto worldSpaceName = worldSpace->GetName();
-			if (worldSpaceName && strcmp(worldSpaceName, exclude.c_str()) != 0) {
-				return worldSpaceName;
+			auto worldSpaceNameTemp = worldSpace->GetName();
+			if (worldSpaceNameTemp && strcmp(worldSpaceNameTemp, exclude.c_str()) != 0) {
+				return worldSpaceNameTemp;
 			}
 		}
 	}
@@ -63,7 +63,9 @@ void RichPresence::UpdateMarker()
 	closestDistance = FLT_MAX;
 	markerName = "";
 	locationName = "";
+	worldSpaceName = GetCurrentWorldSpaceName();
 	RE::TESWorldSpace* cached = nullptr;
+	bool interior = PlayerIsInInterior();
 	if (auto player = RE::PlayerCharacter::GetSingleton()) {
 		cached = player->GetWorldspace();
 		cached = player->GetPlayerRuntimeData().cachedWorldSpace;
@@ -79,14 +81,19 @@ void RichPresence::UpdateMarker()
 					if (auto ptr = handle.get()) {
 						if (auto ref = ptr.get()) {
 							if (auto marker = ref->extraList.GetByType<RE::ExtraMapMarker>()) {
-								type = (Marker)marker->mapData->type.underlying();
+								if (marker->mapData->type.underlying() < 59) {
+									type = (Marker)marker->mapData->type.underlying();
+								}
+								else {
+									type = Marker::Unknown;
+								}
 								markerName = marker->mapData->locationName.fullName;
 							}
 						}
 					}
 				}
 			}
-			if (locationName.empty())
+			if (locationName.empty() && locationName != worldSpaceName)
 			{
 				locationName = location->GetName();
 			}
@@ -99,7 +106,6 @@ void RichPresence::UpdateMarker()
 		}
 
 		if (type == Marker::None) {
-			bool interior = PlayerIsInInterior();
 			auto worldspace = cached;
 			auto position = interior ? player->GetPlayerRuntimeData().exteriorPosition : player->GetPosition();
 			while (worldspace) {
@@ -109,7 +115,12 @@ void RichPresence::UpdateMarker()
 							auto distance = a_ref.GetPosition().GetDistance(player->GetPosition());
 							if (distance < closestDistance) {
 								closestDistance = distance;
-								type = (Marker)marker->mapData->type.underlying();
+								if (marker->mapData->type.underlying() < 59) {
+									type = (Marker)marker->mapData->type.underlying();
+								}
+								else {
+									type = Marker::Unknown;
+								}
 								markerName = marker->mapData->locationName.fullName;
 							}
 						}
@@ -132,20 +143,26 @@ void RichPresence::UpdateMarker()
 			[](unsigned char c) { return (char)std::tolower(c); });
 	}
 
-	if (!locationName.empty())
+	if (interior && !locationName.empty() && locationName != worldSpaceName)
 	{
 		cachedLocation = locationName;
-		inLocation = PlayerIsInInterior() || (cached && cached->parentWorld);
 	}
 	else if (!markerName.empty())
 	{
 		cachedLocation = markerName;
 		inLocation = false;
 	}
+	else if (!locationName.empty() && locationName != worldSpaceName)
+	{
+		cachedLocation = locationName;
+		inLocation = false;
+	}
 	else {
-		cachedLocation = GetCurrentWorldSpaceName();
+		cachedLocation = worldSpaceName;
 		inLocation = true;
 	}
+
+	worldSpaceName = GetCurrentWorldSpaceName(cachedLocation);
 }
 
 void RichPresence::UpdateFlavour()
@@ -449,40 +466,14 @@ void RichPresence::UpdateFlavour()
 
 			std::lock_guard<std::shared_mutex> lockM(markerLock);
 			if (!cachedLocation.empty()) {
-				if (inLocation) {
-					if (!flavour.empty()) {
-						flavour += std::format(" in {}", cachedLocation);
-					}
-					else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
-						flavour += std::format("In {} within {}", cachedLocation, worldSpace);
-					}
-					else {
-						flavour += std::format("In {}", cachedLocation);
-					}
+				if (!flavour.empty()) {
+					flavour += std::format(", {}", cachedLocation);
+				}
+				else if (!worldSpaceName.empty()) {
+					flavour += std::format("{}, {}", cachedLocation, worldSpaceName);
 				}
 				else {
-					if (closestDistance > markerMinDistanceHalf) {
-						if (!flavour.empty()) {
-							flavour += std::format(" near {}", cachedLocation);
-						}
-						else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
-							flavour += std::format("Near {} in {}", cachedLocation, worldSpace);
-						}
-						else {
-							flavour += std::format("Near {}", cachedLocation);
-						}
-					}
-					else {
-						if (!flavour.empty()) {
-							flavour += std::format(" at {}", cachedLocation);
-						}
-						else if (auto worldSpace = GetCurrentWorldSpaceName(cachedLocation)) {
-							flavour += std::format("At {} in {}", cachedLocation, worldSpace);
-						}
-						else {
-							flavour += std::format("At {}", cachedLocation);
-						}
-					}
+					flavour += std::format("{}", cachedLocation);
 				}
 			}
 		}
@@ -541,7 +532,7 @@ void RichPresence::Update()
 			static auto timer = time(nullptr);
 			discord_presence.startTimestamp = timer;
 
-			if (type != Marker::None && type < Marker::Count && !mainMenu) {
+			if (type != Marker::None && !mainMenu) {
 				discord_presence.largeImageKey = cachedIcon.c_str();
 			}
 			else {

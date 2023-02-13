@@ -65,14 +65,14 @@ extern "C" {
 #define DISCORD_REPLY_IGNORE 2
 
 	const char* Discord_Initialize(const char* applicationId,
-		DiscordEventHandlers*                  handlers,
+		DiscordEventHandlers* handlers,
 		int                                    autoRegister,
-		const char*                            optionalSteamId);
+		const char* optionalSteamId);
 
 	/* checks for incoming messages, dispatches callbacks */
 	const void Discord_RunCallbacks(void);
 
-/* If you disable the lib starting its own io thread, you'll need to call this from your own */
+	/* If you disable the lib starting its own io thread, you'll need to call this from your own */
 #ifdef DISCORD_DISABLE_IO_THREAD
 	DISCORD_EXPORT void Discord_UpdateConnection(void);
 #endif

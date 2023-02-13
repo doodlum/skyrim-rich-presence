@@ -84,7 +84,8 @@ public:
 		TelvanniSettlement = 56,
 		TravelIconSW = 57,
 		TravelIconNE = 58,
-		Count
+		Count,
+		Unknown
 	};
 
 	std::string cachedIcon;
@@ -102,6 +103,7 @@ public:
 	std::shared_mutex markerLock;
 	std::string       markerName = "";
 	std::string locationName = "";
+	std::string worldSpaceName = "";
 	Marker            type = Marker::None;
 	float             closestDistance = FLT_MAX;
 	std::string       cachedLocation;

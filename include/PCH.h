@@ -106,7 +106,7 @@ void InitializeLog()
 	spdlog::set_pattern("[%l] %v"s);
 }
 
-extern "C" DLLEXPORT  bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface* a_skse)
+extern "C" DLLEXPORT  bool SKSEAPI SKSEPlugin_Load(const SKSE::LoadInterface * a_skse)
 {
 #ifndef NDEBUG
 	while (!WinAPI::IsDebuggerPresent()) {};
@@ -127,11 +127,10 @@ extern "C" DLLEXPORT  constinit auto SKSEPlugin_Version = []() noexcept {
 	return v;
 }();
 
-extern "C" DLLEXPORT  bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo* pluginInfo)
+extern "C" DLLEXPORT  bool SKSEAPI SKSEPlugin_Query(const SKSE::QueryInterface*, SKSE::PluginInfo * pluginInfo)
 {
 	pluginInfo->name = SKSEPlugin_Version.pluginName;
 	pluginInfo->infoVersion = SKSE::PluginInfo::kVersion;
 	pluginInfo->version = SKSEPlugin_Version.pluginVersion;
 	return true;
 }
-

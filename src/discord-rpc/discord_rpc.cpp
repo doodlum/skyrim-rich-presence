@@ -8,14 +8,14 @@ namespace Discord
 }
 
 typedef const char* (*_Discord_Initialize)(const char* applicationId,
-	DiscordEventHandlers*                              handlers,
+	DiscordEventHandlers* handlers,
 	int                                                autoRegister,
-	const char*                                        optionalSteamId);
+	const char* optionalSteamId);
 
 const char* Discord_Initialize(const char* applicationId,
-	DiscordEventHandlers*                  handlers,
+	DiscordEventHandlers* handlers,
 	int                                    autoRegister,
-	const char*                            optionalSteamId)
+	const char* optionalSteamId)
 {
 	return reinterpret_cast<_Discord_Initialize>(WinAPI::GetProcAddress(Discord::hModule, "Discord_Initialize"))(applicationId, handlers, autoRegister, optionalSteamId);
 }

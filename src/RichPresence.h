@@ -6,8 +6,7 @@
 #include <discord-rpc/discord_rpc.h>
 
 constexpr auto steamAppID = "72850";
-constexpr auto markerMinDistance = 8192;
-constexpr auto markerMinDistanceHalf = 4096;
+constexpr auto markerMinDistance = 16384;
 
 class RichPresence
 {
@@ -113,7 +112,6 @@ public:
 	Marker            type = Marker::None;
 	float             closestDistance = FLT_MAX;
 	std::string       cachedLocation;
-	bool              inLocation = true;
 
 	std::shared_mutex flavourLock;
 	std::string       flavour;
@@ -133,6 +131,8 @@ public:
 
 	std::string defaultExteriorIcon = "grove";
 	std::string defaultInteriorIcon = "settlement";
+
+	bool alwaysUpdateMarker = true;
 
 	bool skipUnbound = false;
 

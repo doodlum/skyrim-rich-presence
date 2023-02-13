@@ -17,10 +17,11 @@ void RichPresence::Load()
 	smallImageKey = ini.GetValue("Default", "SmallImageKey", "");
 	smallImageText = ini.GetValue("Default", "SmallImageText", "");
 
-	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
+	defaultExteriorIcon = ini.GetValue("Default", "DefaultExteriorIcon", "grove");
+	defaultInteriorIcon = ini.GetValue("Default", "DefaultInteriorIcon", "settlement");
 
-	defaultExteriorIcon = ini.GetValue("Options", "DefaultExteriorIcon", "grove");
-	defaultInteriorIcon = ini.GetValue("Options", "DefaultInteriorIcon", "settlement");
+	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
+	alwaysUpdateMarker = ini.GetBoolValue("Options", "AlwaysUpdateMarker", true);
 }
 
 bool PlayerIsInInterior()
@@ -226,16 +227,13 @@ void RichPresence::UpdateMarker()
 	else if (!markerName.empty())
 	{
 		cachedLocation = markerName;
-		inLocation = false;
 	}
 	else if (!locationName.empty() && locationName != worldSpaceName)
 	{
 		cachedLocation = locationName;
-		inLocation = false;
 	}
 	else {
 		cachedLocation = worldSpaceName;
-		inLocation = true;
 	}
 
 	worldSpaceName = GetCurrentWorldSpaceName(cachedLocation);
@@ -543,6 +541,7 @@ void RichPresence::UpdateFlavour()
 
 			std::lock_guard<std::shared_mutex> lockM(markerLock);
 			if (!cachedLocation.empty()) {
+				std::string range = "";
 				if (!flavour.empty()) {
 					flavour += std::format(", {}", cachedLocation);
 				}
@@ -585,7 +584,7 @@ void RichPresence::Update()
 
 					static void* cellPtr = nullptr;
 					auto currentCell = player->GetParentCell();;
-					if (cellPtr != currentCell)
+					if (alwaysUpdateMarker || (cellPtr != currentCell))
 					{
 						cellPtr = currentCell;
 						SKSE::GetTaskInterface()->AddTask([&]() {
@@ -609,7 +608,7 @@ void RichPresence::Update()
 			static auto timer = time(nullptr);
 			discord_presence.startTimestamp = timer;
 
-			if (type != Marker::None && !mainMenu) {
+			if (!cachedIcon.empty() && !mainMenu) {
 				discord_presence.largeImageKey = cachedIcon.c_str();
 			}
 			else {

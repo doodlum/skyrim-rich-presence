@@ -22,6 +22,10 @@ void RichPresence::Load()
 
 	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
 	alwaysUpdateMarker = ini.GetBoolValue("Options", "AlwaysUpdateMarker", true);
+	showPlayerName = ini.GetBoolValue("Options", "ShowPlayerName", false);
+	showNotifications = ini.GetBoolValue("Options", "ShowNotifications", false);
+	markerMinDistance = (float)ini.GetDoubleValue("Options", "MarkerMinDistance", 16384);
+	messageDuration = (int)ini.GetLongValue("Options", "MessageDuration", 5);
 }
 
 bool PlayerIsInInterior()
@@ -533,7 +537,7 @@ void RichPresence::Init()
 	DiscordEventHandlers handlers;
 	ZeroMemory(&handlers, sizeof(handlers));
 	handlers.ready = HandleDiscordReady;
-	handlers.disconnected = HandleDiscordError;
+	handlers.errored = HandleDiscordError;
 	handlers.disconnected = HandleDiscordDisconnected;
 	Discord_Initialize(applicationID.c_str(), &handlers, 1, steamAppID);
 	logger::info("Discord RPC Initialised");
@@ -555,7 +559,12 @@ void RichPresence::Update()
 					if (auto race = player->GetRace()) {
 						raceName = race->GetName();
 					}
-					details += std::format("{}, {}, Level {}", player->GetName(), raceName, player->GetLevel());
+					if (showPlayerName) {
+						details = std::format("{}, {}, Level {}", player->GetName(), raceName, player->GetLevel());
+					}
+					else {
+						details = std::format("{}, Level {}", raceName, player->GetLevel());
+					}
 
 					static void* cellPtr = nullptr;
 					auto currentCell = player->GetParentCell();;

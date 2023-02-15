@@ -6,8 +6,6 @@
 #include <discord-rpc/discord_rpc.h>
 
 constexpr auto steamAppID = "72850";
-constexpr auto markerMinDistance = 16384;
-constexpr auto messageDuration = 5;
 
 class RichPresence
 {
@@ -146,9 +144,12 @@ public:
 	std::string defaultExteriorIcon = "grove";
 	std::string defaultInteriorIcon = "settlement";;
 
-	bool alwaysUpdateMarker = true;
-
 	bool skipUnbound = false;
+	bool alwaysUpdateMarker = true;
+	bool showPlayerName = false;
+	bool showNotifications = false;
+	float markerMinDistance = 16384;
+	int messageDuration = 5;
 
 	float delay = 0;
 
@@ -157,7 +158,7 @@ public:
 
 	void Update();
 
-	float messageTimer = 0;
+	int messageTimer = 0;
 	std::string lastMessage = "";
 	void UpdateMessage(char* text);
 
@@ -179,7 +180,9 @@ public:
 		{
 			static RE::HUDData* thunk(std::uint32_t unk, char* text)
 			{
-				GetSingleton()->UpdateMessage(text);
+				if (GetSingleton()->showNotifications) {
+					GetSingleton()->UpdateMessage(text);
+				}
 				return func(unk, text);
 			}
 			static inline REL::Relocation<decltype(thunk)> func;
@@ -207,7 +210,6 @@ public:
 			stl::write_thunk_call<MainUpdate_Nullsub>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x748, 0xC26));
 			stl::write_thunk_call<ShowHUDMessage_BuildHUDData>(REL::RelocationID(52050, 52933).address() + REL::Relocate(0x19B, 0x31D));
 			stl::write_vfunc<0x1, HUDNotifications_Update>(RE::VTABLE_HUDNotifications[0]);
-
 		}
 	};
 

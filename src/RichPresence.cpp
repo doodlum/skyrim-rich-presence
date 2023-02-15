@@ -57,7 +57,7 @@ void RichPresence::CacheMapMarkers()
 						logger::debug("Marker {} Unknown", marker->mapData->type.underlying());
 					}
 					if (marker->mapData->type.underlying() < 59) {
-						mapMarkerCache.insert({ &a_ref, (Marker)marker->mapData->type.underlying()});
+						mapMarkerCache.insert({ &a_ref, (Marker)marker->mapData->type.underlying() });
 					}
 				}
 				return RE::BSContainer::ForEachResult::kContinue;
@@ -68,20 +68,25 @@ void RichPresence::CacheMapMarkers()
 
 void RichPresence::DataLoaded()
 {
-	markerBase = RE::TESForm::LookupByID(0x10)->As<RE::TESObjectSTAT>();
 	auto sMapWorldDefaultWorldSpace = RE::GetINISetting("sMapWorldDefaultWorldSpace:MapMenu");
-	defaultWorldSpace = RE::TESForm::LookupByEditorID(sMapWorldDefaultWorldSpace->GetString());
-	unboundQuest = RE::TESForm::LookupByEditorID("MQ101")->As<RE::TESQuest>();
+	MapWorldDefaultWorldSpace = RE::TESForm::LookupByEditorID(sMapWorldDefaultWorldSpace->GetString())->As<RE::TESWorldSpace>();
+	Skyrim_MarkerBase = RE::TESForm::LookupByID(0x10)->As<RE::TESObjectSTAT>();
+	Skyrim_UnboundQuest = RE::TESForm::LookupByEditorID("MQ101")->As<RE::TESQuest>();
+	auto dataHandler = RE::TESDataHandler::GetSingleton();
+	if (dataHandler->LookupLoadedLightModByName("ccQDRSSE001-SurvivalMode.esl")) {
+		Survival_ModeEnabled = dataHandler->LookupForm(0x2EDD, "Update.esm")->As<RE::TESGlobal>();
+		Survival_TemperatureLevel = dataHandler->LookupForm(0x826, "ccQDRSSE001-SurvivalMode.esl")->As<RE::TESGlobal>();
+	}
 	CacheMapMarkers();
 	dataLoaded = true;
 }
 
 std::string RichPresence::GetCurrentWorldSpaceName(std::string exclude)
 {
-	if (auto tes = RE::TES::GetSingleton()) {
-		auto cached = RE::TES::GetSingleton()->worldSpace;
+	if (auto player = RE::PlayerCharacter::GetSingleton()) {
+		auto cached = player->GetPlayerRuntimeData().cachedWorldSpace;
 		if (!cached) {
-			cached = defaultWorldSpace->As<RE::TESWorldSpace>();
+			cached = MapWorldDefaultWorldSpace->As<RE::TESWorldSpace>();
 		}
 		for (auto worldSpace = cached; worldSpace; worldSpace = worldSpace->parentWorld) {
 			auto worldSpaceNameTemp = worldSpace->GetName();
@@ -107,98 +112,59 @@ void RichPresence::UpdateMarker()
 		cached = player->GetPlayerRuntimeData().cachedWorldSpace;
 
 		if (!cached) {
-			cached = defaultWorldSpace->As<RE::TESWorldSpace>();
+			cached = MapWorldDefaultWorldSpace->As<RE::TESWorldSpace>();
 		}
 
-		auto location = player->GetCurrentLocation();
-		while (location) {
-			if (type == Marker::None) {
-				if (auto handle = location->worldLocMarker) {
-					if (auto ptr = handle.get()) {
-						if (auto ref = ptr.get()) {
-							if (auto marker = ref->extraList.GetByType<RE::ExtraMapMarker>()) {
+		for (auto location = player->GetCurrentLocation(); location && locationName.empty(); location = location->parentLoc) {
+			if (auto name = location->GetName()) {
+				locationName = name;
+			}
+		}
+
+		auto position = interior ? player->GetPlayerRuntimeData().exteriorPosition : player->GetPosition();
+		for (auto worldSpace = cached; worldSpace; worldSpace = worldSpace->parentWorld) {
+			worldSpace->persistentCell->ForEachReferenceInRange(position, markerMinDistance, [&](RE::TESObjectREFR& a_ref) {
+				if (a_ref.GetBaseObject() == Skyrim_MarkerBase) {
+					if (auto marker = a_ref.extraList.GetByType<RE::ExtraMapMarker>()) {
+						auto distance = a_ref.GetPosition().GetDistance(position);
+						if (auto name = marker->mapData->locationName.fullName.c_str()) {
+							if (strcmp(name, locationName.c_str()) == 0) {
+								closestDistance = 0;
 								if (marker->mapData->type.underlying() < 59) {
 									type = (Marker)marker->mapData->type.underlying();
 								}
 								else {
-									type = Marker::Unknown;
-								}
-								markerName = marker->mapData->locationName.fullName;
-							}
-						}
-					}
-				}
-			}
-			if (locationName.empty() && locationName != worldSpaceName)
-			{
-				locationName = location->GetName();
-			}
-			if (location != location->parentLoc) {
-				location = location->parentLoc;
-			}
-			else {
-				location = nullptr;
-			}
-		}
-
-		if (type == Marker::None) {
-			auto worldSpace = cached;
-			auto position = player->GetPosition();
-			if (interior) {
-				logger::debug("Player is in interior");
-				position = player->GetPlayerRuntimeData().exteriorPosition;
-			}
-			else {
-				logger::debug("Player is not in interior");
-			}
-			logger::debug("Player position is {} {} {}", position.x, position.y, position.z);
-			while (worldSpace && type == Marker::None) {
-				if (auto name = worldSpace->GetName()) {
-					logger::debug("Searching World Space {}", name);
-				}
-				else {
-					logger::debug("Searching Unknown World Space");
-				}
-				while (worldSpace && type == Marker::None) {
-					worldSpace->persistentCell->ForEachReferenceInRange(position, markerMinDistance, [&](RE::TESObjectREFR& a_ref) {
-						if (a_ref.GetBaseObject() == markerBase) {
-							if (auto marker = a_ref.extraList.GetByType<RE::ExtraMapMarker>()) {
-								auto distance = a_ref.GetPosition().GetDistance(position);
-								if (auto name = marker->mapData->locationName.GetFullName()) {
-									logger::debug("Testing Marker {:X} {} {} | Distance {} | Position {} {} {}", a_ref.GetFormID(), marker->mapData->type.underlying(), name, distance, a_ref.GetPosition().x, a_ref.GetPosition().y, a_ref.GetPosition().z);
-								}
-								else {
-									logger::debug("Testing Marker {:X} {} Unknown | Distance {} | Position {} {} {}", a_ref.GetFormID(), marker->mapData->type.underlying(), distance, a_ref.GetPosition().x, a_ref.GetPosition().y, a_ref.GetPosition().z);
-								}
-								if (distance < closestDistance && marker->mapData->flags.any(RE::MapMarkerData::Flag::kVisible)) {
-									logger::debug("Shorter than distance {} from {}", closestDistance, markerName);
-									closestDistance = distance;
-									if (marker->mapData->type.underlying() < 59) {
-										type = (Marker)marker->mapData->type.underlying();
+									auto it = mapMarkerCache.find(&a_ref);
+									if (it != mapMarkerCache.end()) {
+										type = (*it).second;
 									}
 									else {
-										auto it = mapMarkerCache.find(&a_ref);
-										if (it != mapMarkerCache.end()){
-											type = (*it).second;
-										}
-										else {
-											type = Marker::Unknown;
-										}
+										type = Marker::Unknown;
 									}
-									markerName = marker->mapData->locationName.fullName;
 								}
+								markerName = name;
+							}
+							else if (distance < closestDistance && marker->mapData->flags.all(RE::MapMarkerData::Flag::kVisible)) {
+								closestDistance = distance;
+								if (marker->mapData->type.underlying() < 59) {
+									type = (Marker)marker->mapData->type.underlying();
+								}
+								else {
+									auto it = mapMarkerCache.find(&a_ref);
+									if (it != mapMarkerCache.end()) {
+										type = (*it).second;
+									}
+									else {
+										type = Marker::Unknown;
+									}
+								}
+								markerName = name;
 							}
 						}
-						return RE::BSContainer::ForEachResult::kContinue;
-						});
-					if (worldSpace != worldSpace->parentWorld) {
-						worldSpace = worldSpace->parentWorld;
-					}
-					else {
-						worldSpace = nullptr;
 					}
 				}
-			}
+				return RE::BSContainer::ForEachResult::kContinue;
+				});
 		}
 	}
 
@@ -214,23 +180,20 @@ void RichPresence::UpdateMarker()
 			if (cell->IsInteriorCell())
 			{
 				cachedIcon = defaultInteriorIcon;
-			} else{
+			}
+			else {
 				cachedIcon = defaultExteriorIcon;
 			}
 		}
 	}
 
-	if (interior && !locationName.empty() && locationName != worldSpaceName)
+	if (!locationName.empty())
 	{
 		cachedLocation = locationName;
 	}
 	else if (!markerName.empty())
 	{
 		cachedLocation = markerName;
-	}
-	else if (!locationName.empty() && locationName != worldSpaceName)
-	{
-		cachedLocation = locationName;
 	}
 	else {
 		cachedLocation = worldSpaceName;
@@ -259,40 +222,40 @@ void RichPresence::UpdateFlavour()
 			bool named = false;
 			if (auto ref = RE::TESObjectREFR::LookupByHandle(RE::BarterMenu::GetTargetRefHandle())) {
 				if (auto name = ref->GetName()) {
-					flavour += std::format("Bartering with {}", name);
+					flavour = std::format("Bartering with {}", name);
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Bartering";
+				flavour = "Bartering";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::BookMenu::MENU_NAME)) {
 			bool named = false;
 			if (auto ref = RE::BookMenu::GetTargetForm()) {
 				if (auto name = ref->GetName()) {
-					flavour += std::format("Reading {}", name);
+					flavour = std::format("Reading {}", name);
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Reading";
+				flavour = "Reading";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::Console::MENU_NAME)) {
 			bool named = false;
 			if (auto ref = RE::Console::GetSelectedRef()) {
 				if (auto name = ref->GetName()) {
-					flavour += std::format("In the console ({})", name);
+					flavour = std::format("Console ({})", name);
 					named = true;
 				}
 				else {
-					flavour += std::format("In the console ({:X})", ref->GetFormID());
+					flavour = std::format("Console ({:X})", ref->GetFormID());
 				}
 				named = true;
 			}
 			if (!named) {
-				flavour += "In the console";
+				flavour = "Console";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::ContainerMenu::MENU_NAME)) {
@@ -300,16 +263,16 @@ void RichPresence::UpdateFlavour()
 			if (auto ref = RE::TESObjectREFR::LookupByHandle(RE::ContainerMenu::GetTargetRefHandle())) {
 				if (auto name = ref->GetName()) {
 					if (auto actor = ref->As<RE::Actor>()) {
-						flavour += std::format("Searching {} {}", actor->GetActorBase()->IsUnique() ? "" : " a ", name);
+						flavour = std::format("Searching {}", name);
 					}
 					else {
-						flavour += std::format("Searching {}", name);
+						flavour = std::format("Searching {}", name);
 					}
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Searching a container";
+				flavour = "Searching container";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::CraftingMenu::MENU_NAME)) {
@@ -319,53 +282,48 @@ void RichPresence::UpdateFlavour()
 				if (auto sub = menu->GetCraftingSubMenu()) {
 					if (auto furn = sub->furniture) {
 						if (auto name = furn->GetName()) {
-							flavour += std::format("Using {}", name);
+							flavour = std::format("Using {}", name);
 							named = true;
 						}
 					}
 				}
 			}
 			if (!named) {
-				flavour += "Crafting";
+				flavour = "Crafting";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::CreationClubMenu::MENU_NAME)) {
-			flavour += "Looking at Creation Club";
+			flavour = "Creation Club Menu";
 		}
 		else if (ui->IsMenuOpen(RE::CreditsMenu::MENU_NAME)) {
-			flavour += "Watching credits";
+			flavour = "Watching credits";
 		}
 		else if (ui->IsMenuOpen(RE::FavoritesMenu::MENU_NAME)) {
-			flavour += "Equipping items";
+			flavour = "Favourites Menu";
 		}
 		else if (ui->IsMenuOpen(RE::GiftMenu::MENU_NAME)) {
 			bool named = false;
 			if (auto ref = RE::TESObjectREFR::LookupByHandle(RE::GiftMenu::GetTargetRefHandle())) {
 				if (auto name = ref->GetName()) {
-					flavour += std::format("Giving a gift to {}", name);
+					flavour = std::format("Giving gift to {}", name);
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Giving a gift";
+				flavour = "Giving gift";
 			}
 		}
 		else if (ui->IsMenuOpen(RE::InventoryMenu::MENU_NAME)) {
-			flavour += "In the inventory";
+			flavour = "Inventory Menu";
+		}
+		else if (ui->IsMenuOpen(RE::ModManagerMenu::MENU_NAME)) {
+			flavour = "Mod Manager Menu";
 		}
 		else if (ui->IsMenuOpen(RE::JournalMenu::MENU_NAME)) {
-			flavour += "Looking at the journal";
+			flavour = "Journal Menu";
 		}
 		else if (ui->IsMenuOpen(RE::LevelUpMenu::MENU_NAME)) {
-			flavour += "Advancing an attribute";
-		}
-		else if (ui->IsMenuOpen(RE::LoadingMenu::MENU_NAME)) {
-			flavour += "Loading";
-			iconOverride = "loading";
-		}
-		else if (ui->IsMenuOpen(RE::LoadWaitSpinner::MENU_NAME)) {
-			flavour += "Loading";
-			iconOverride = "loading";
+			flavour = "LevelUp Menu";
 		}
 		else if (ui->IsMenuOpen(RE::LockpickingMenu::MENU_NAME)) {
 			bool named = false;
@@ -393,72 +351,57 @@ void RichPresence::UpdateFlavour()
 					break;
 				}
 				if (auto name = ref->GetName()) {
-					flavour += std::format("Lockpicking {} ({})", name, level);
+					flavour = std::format("Lockpicking {} ({})", name, level);
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Lockpicking";
+				flavour = "Lockpicking";
 			}
 			iconOverride = "locked";
 		}
 		else if (ui->IsMenuOpen(RE::MagicMenu::MENU_NAME)) {
-			flavour += "In the magic menu";
+			flavour = "Magic Menu";
 		}
 		else if (ui->IsMenuOpen(RE::MainMenu::MENU_NAME)) {
-			flavour += "On the main menu";
+			flavour = "Main Menu";
 			mainMenu = true;
 		}
 		else if (ui->IsMenuOpen(RE::MapMenu::MENU_NAME)) {
-			flavour += "Looking at the map";
+			flavour = "Map Menu";
 		}
 		else if (ui->IsMenuOpen(RE::MessageBoxMenu::MENU_NAME)) {
-			flavour += "Reading a message";
-		}
-		else if (ui->IsMenuOpen(RE::MistMenu::MENU_NAME)) {
-			flavour += "Loading";
-			iconOverride = "loading";
-		}
-		else if (ui->IsMenuOpen(RE::ModManagerMenu::MENU_NAME)) {
-			flavour += "Managing mods";
+			flavour = "Message Box";
 		}
 		else if (ui->IsMenuOpen(RE::RaceSexMenu::MENU_NAME)) {
-			flavour += "Editing character";
+			flavour = "Race Menu";
 		}
 		else if (ui->IsMenuOpen(RE::SleepWaitMenu::MENU_NAME)) {
-			flavour += "Waiting";
+			flavour = "Sleep/Wait Menu";
 		}
 		else if (ui->IsMenuOpen(RE::StatsMenu::MENU_NAME)) {
-			flavour += "In the skills menu";
+			flavour = "Stats Menu";
 		}
 		else if (ui->IsMenuOpen(RE::TitleSequenceMenu::MENU_NAME)) {
-			flavour += "Started a new game";
+			flavour = "New Game";
 			mainMenu = true;
 		}
 		else if (ui->IsMenuOpen(RE::TutorialMenu::MENU_NAME)) {
-			flavour += "Reading a tutorial";
+			flavour = "Tutorial Menu";
 		}
 		else if (ui->IsMenuOpen(RE::TweenMenu::MENU_NAME)) {
-			flavour += "In a menu";
+			flavour = "Tween Menu";
 		}
 		else if (ui->IsMenuOpen(RE::TrainingMenu::MENU_NAME)) {
 			bool named = false;
 			if (speaker) {
 				if (auto name = speaker->GetName()) {
-					flavour += std::format("Training with {}", name);
+					flavour = std::format("Training with {}", name);
 					named = true;
 				}
 			}
 			if (!named) {
-				flavour += "Training";
-			}
-		}
-		else if (speaker) {
-			if (auto name = speaker->GetName()) {
-				flavour += std::format("Talking to {}", name);
-			}
-			else {
-				flavour += "Talking to someone";
+				flavour = "Training";
 			}
 		}
 	}
@@ -468,72 +411,86 @@ void RichPresence::UpdateFlavour()
 		iconOverride = "checkmark";
 	}
 
+	if (iconOverride.empty())
+	{
+		if (Survival_ModeEnabled && Survival_ModeEnabled->value && Survival_TemperatureLevel && Survival_TemperatureLevel->value)
+		{
+			auto value = Survival_TemperatureLevel->value;
+			if (value > 2)
+			{
+				iconOverride = "survivalwarm";
+			}
+			else {
+				iconOverride = "survivalcold";
+			}
+		}
+	}
+
 	if (flavour.empty()) {
 		if (auto player = RE::PlayerCharacter::GetSingleton()) {
-			if (flavour.empty()) {
-				bool         mounted = false;
-				RE::ActorPtr ptr;
-				if (auto mount = player->GetMount(ptr) && ptr) {
-					mounted = true;
-					if (auto name = ptr->GetName()) {
-						flavour = std::format("Riding {}", name);
-					}
-					else {
-						flavour = std::format("Riding", name);
-					}
+			bool         mounted = false;
+			RE::ActorPtr ptr;
+			if (speaker) {
+				if (auto name = speaker->GetName()) {
+					flavour = std::format("Talking to {}", name);
 				}
+				else {
+					flavour = "Talking to someone";
+				}
+			}
+			else if (auto mount = player->GetMount(ptr) && ptr) {
+				mounted = true;
+				if (auto name = ptr->GetName()) {
+					flavour = std::format("Riding {}", name);
+				}
+				else {
+					flavour = std::format("Riding", name);
+				}
+			}
 
-				if (!mounted) {
-					if (player->IsDead()) {
-						flavour = "Died";
-					}
-					else if (player->IsInRagdollState()) {
-						flavour = "Ragdolling";
-					}
-					else if (player->IsInCombat()) {
-						bool named = false;
-						if (auto target = player->GetActorRuntimeData().currentCombatTarget) {
-							if (auto ref = target.get()) {
-								if (auto name = ref->GetName()) {
-									flavour = std::format("Fighting {}", name);
-									named = true;
-								}
+			if (!mounted) {
+				if (player->IsDead()) {
+					flavour = "Died";
+				}
+				else if (player->IsInRagdollState()) {
+					flavour = "Ragdolling";
+				}
+				else if (player->IsInCombat()) {
+					bool named = false;
+					if (auto target = player->GetActorRuntimeData().currentCombatTarget) {
+						if (auto ref = target.get()) {
+							if (auto name = ref->GetName()) {
+								flavour = std::format("Fighting {}", name);
+								named = true;
 							}
+						}
+					}
+					if (!named)
+					{
+						flavour = "Fighting";
+					}
+					iconOverride = "enemyclose";
+				}
+				else if (player->IsSneaking()) {
+					flavour = "Sneaking";
+				}
+				else if (player->AsActorState()->IsFlying()) {
+					flavour = "Flying";
+				}
+				else if (player->AsActorState()->IsSwimming()) {
+					flavour = "Swimming";
+				}
+				else if (auto handle = player->GetOccupiedFurniture())
+				{
+					if (auto ref = handle.get()) {
+						bool named = false;
+						if (auto name = ref->GetName()) {
+							flavour = std::format("Using {}", name);
+							named = true;
 						}
 						if (!named)
 						{
-							flavour = "Fighting";
-						}
-						iconOverride = "enemyclose";
-					}
-					else if (player->IsSneaking()) {
-						flavour = "Sneaking";
-					}
-					else if (player->AsActorState()->IsFlying()) {
-						flavour = "Flying";
-					}
-					else if (player->AsActorState()->IsSwimming()) {
-						flavour = "Swimming";
-					}
-					else {
-						if (auto process = player->GetActorRuntimeData().currentProcess)
-						{
-							if (auto target = process->GetHeadtrackTarget())
-							{
-								bool named = false;
-								if (auto ref = target.get()) {
-									if (ref.get() == player) {
-									}
-									else if (auto name = ref->GetName()) {
-										flavour = std::format("Looking at {}", name);
-									}
-									named = true;
-								}
-								if (!named)
-								{
-									flavour = "Looking at something";
-								}
-							}
+							flavour = "Using object";
 						}
 					}
 				}
@@ -549,17 +506,35 @@ void RichPresence::UpdateFlavour()
 					flavour += std::format("{}, {}", cachedLocation, worldSpaceName);
 				}
 				else {
-					flavour += std::format("{}", cachedLocation);
+					flavour = std::format("{}", cachedLocation);
 				}
 			}
 		}
 	}
 }
 
+void HandleDiscordReady(const DiscordUser* connected_user)
+{
+	logger::info("Discord RPC: connected to user {}{} - {}", connected_user->username, connected_user->discriminator, connected_user->userId);
+}
+
+void HandleDiscordError(const int error_code, const char* message)
+{
+	logger::info("Discord RPC: an error occured ({}: {})", error_code, message);
+}
+
+void HandleDiscordDisconnected(const int error_code, const char* message)
+{
+	logger::info("Discord RPC: disconnected ({}: {})", error_code, message);
+}
+
 void RichPresence::Init()
 {
 	DiscordEventHandlers handlers;
-	memset(&handlers, 0, sizeof(handlers));
+	ZeroMemory(&handlers, sizeof(handlers));
+	handlers.ready = HandleDiscordReady;
+	handlers.disconnected = HandleDiscordError;
+	handlers.disconnected = HandleDiscordDisconnected;
 	Discord_Initialize(applicationID.c_str(), &handlers, 1, steamAppID);
 	logger::info("Discord RPC Initialised");
 }
@@ -601,7 +576,7 @@ void RichPresence::Update()
 			DiscordRichPresence discord_presence;
 			memset(&discord_presence, 0, sizeof(discord_presence));
 			discord_presence.state = flavour.c_str();
-			if (!mainMenu && dataLoaded && (skipUnbound || unboundQuest->IsCompleted())) {
+			if (!mainMenu && dataLoaded && (skipUnbound || Skyrim_UnboundQuest->IsCompleted())) {
 				discord_presence.details = details.c_str();
 			}
 
@@ -619,6 +594,13 @@ void RichPresence::Update()
 			discord_presence.smallImageKey = smallImageKey.c_str();
 			discord_presence.smallImageText = smallImageText.c_str();
 
+			if (messageTimer > 0 && !lastMessage.empty())
+			{
+				discord_presence.details = discord_presence.state;
+				discord_presence.state = lastMessage.c_str();
+				messageTimer -= 1;
+			}
+
 			if (!iconOverride.empty()) {
 				discord_presence.smallImageKey = iconOverride.c_str();
 			}
@@ -628,7 +610,20 @@ void RichPresence::Update()
 		}
 	}
 	else {
-		static float& g_deltaTimeRealTime = (*(float*)RELOCATION_ID(523661, 410200).address());                 // 2F6B94C, 30064CC
+		static float& g_deltaTimeRealTime = (*(float*)RELOCATION_ID(523661, 410200).address()); // 2F6B94C, 30064CC
 		delay -= g_deltaTimeRealTime;
+	}
+}
+
+void RichPresence::UpdateMessage(char* text)
+{
+	std::lock_guard<std::shared_mutex> lockF(flavourLock);
+	if (text) {
+		messageTimer = messageDuration;
+		lastMessage = text;
+		if (lastMessage.back() != '.')
+		{
+			lastMessage += '.';
+		}
 	}
 }

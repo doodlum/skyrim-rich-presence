@@ -7,6 +7,7 @@
 
 constexpr auto steamAppID = "72850";
 constexpr auto markerMinDistance = 16384;
+constexpr auto messageDuration = 5;
 
 class RichPresence
 {
@@ -32,7 +33,7 @@ public:
 		Camp = 5,
 		Fort = 6,
 		NordicRuin = 7,
-		DwemerRuin = 8,
+		Dwemer = 8,
 		Shipwreck = 9,
 		Grove = 10,
 		Landmark = 11,
@@ -94,9 +95,22 @@ public:
 	std::string cachedIcon;
 
 	bool dataLoaded = false;
-	RE::TESObjectSTAT* markerBase = nullptr;
-	RE::TESForm* defaultWorldSpace = nullptr;
-	RE::TESQuest* unboundQuest = nullptr;
+
+	RE::TESWorldSpace* MapWorldDefaultWorldSpace = nullptr;
+	RE::TESObjectSTAT* Skyrim_MarkerBase = nullptr;
+	RE::TESQuest* Skyrim_UnboundQuest = nullptr;
+
+	RE::TESGlobal* Survival_ModeEnabled = nullptr;
+	RE::TESGlobal* Survival_TemperatureLevel = nullptr;
+
+	enum class UI_LEVEL
+	{
+		kNeutral = 0,
+		kNearHeat = 1,
+		kWarm = 2,
+		kCold = 3,
+		kFreezing = 4
+	};
 
 	bool mainMenu = true;
 
@@ -130,7 +144,7 @@ public:
 	std::string smallImageText = "";
 
 	std::string defaultExteriorIcon = "grove";
-	std::string defaultInteriorIcon = "settlement";
+	std::string defaultInteriorIcon = "settlement";;
 
 	bool alwaysUpdateMarker = true;
 
@@ -142,6 +156,10 @@ public:
 	void Init();
 
 	void Update();
+
+	float messageTimer = 0;
+	std::string lastMessage = "";
+	void UpdateMessage(char* text);
 
 	struct Hooks
 	{
@@ -157,9 +175,39 @@ public:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
+		struct ShowHUDMessage_BuildHUDData
+		{
+			static RE::HUDData* thunk(std::uint32_t unk, char* text)
+			{
+				GetSingleton()->UpdateMessage(text);
+				return func(unk, text);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
+		struct HUDNotifications_Update
+		{
+			static char thunk(RE::HUDNotifications* This)
+			{
+				if (This->queue.size())
+				{
+					auto& front = This->queue.front();
+					if (auto text = front.text.c_str())
+					{
+						GetSingleton()->UpdateMessage((char*)text);
+					}
+				}
+				return func(This);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
 		static void Install()
 		{
 			stl::write_thunk_call<MainUpdate_Nullsub>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x748, 0xC26));
+			stl::write_thunk_call<ShowHUDMessage_BuildHUDData>(REL::RelocationID(52050, 52933).address() + REL::Relocate(0x19B, 0x31D));
+			stl::write_vfunc<0x1, HUDNotifications_Update>(RE::VTABLE_HUDNotifications[0]);
+
 		}
 	};
 

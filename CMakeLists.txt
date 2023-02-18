@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.21)
 
 project(
 	DiscordRichPresence
-	VERSION 1.1.0
+	VERSION 1.2.0
 	LANGUAGES CXX
 )
 
@@ -18,9 +18,11 @@ target_include_directories(
 )
 
 find_package(magic_enum CONFIG REQUIRED)
+find_package(RapidJSON CONFIG REQUIRED)
 
 target_link_libraries(
 ${PROJECT_NAME} 
 PRIVATE
 	magic_enum::magic_enum
+	rapidjson
 )

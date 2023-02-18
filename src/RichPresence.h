@@ -151,7 +151,18 @@ public:
 	float markerMinDistance = 16384;
 	int messageDuration = 5;
 
-	float delay = 0;
+	std::shared_mutex statsLock;
+	bool showStats = true;
+	int statsDuration = 2;
+
+	std::string buttonLabel1 = "";
+	std::string buttonUrl1 = "https://www.nexusmods.com/skyrimspecialedition/mods/84847";
+	std::string buttonLabel2 = "";
+	std::string buttonUrl2 = "";
+
+	std::string statsButton = "";
+
+	std::set<std::string> statNames;
 
 	void Load();
 	void Init();
@@ -161,6 +172,13 @@ public:
 	int messageTimer = 0;
 	std::string lastMessage = "";
 	void UpdateMessage(char* text);
+
+	static bool MiscStatManager_QueryStat(RE::BSFixedString& a_stat, int& o_value)
+	{
+		using func_t = decltype(&MiscStatManager_QueryStat);
+		REL::Relocation<func_t> func{ REL::RelocationID(16120, 16362) };  // 1.5.97 1405E1510
+		return func(a_stat, o_value);
+	}
 
 	struct Hooks
 	{
@@ -205,11 +223,24 @@ public:
 			static inline REL::Relocation<decltype(thunk)> func;
 		};
 
+		struct MiscStatManager_AddStat
+		{
+			static bool thunk(std::int32_t a_type, RE::BSFixedString const& a_name, char const* a_cstr, int unk1, bool unk2)
+			{
+				std::string name = a_name.data();
+				std::lock_guard<std::shared_mutex> lockS(GetSingleton()->statsLock);
+				GetSingleton()->statNames.insert(name);
+				return func(a_type, a_name, a_cstr, unk1, unk2);
+			}
+			static inline REL::Relocation<decltype(thunk)> func;
+		};
+
 		static void Install()
 		{
 			stl::write_thunk_call<MainUpdate_Nullsub>(REL::RelocationID(35565, 36564).address() + REL::Relocate(0x748, 0xC26));
 			stl::write_thunk_call<ShowHUDMessage_BuildHUDData>(REL::RelocationID(52050, 52933).address() + REL::Relocate(0x19B, 0x31D));
 			stl::write_vfunc<0x1, HUDNotifications_Update>(RE::VTABLE_HUDNotifications[0]);
+			stl::write_thunk_call<MiscStatManager_AddStat>(REL::RelocationID(16121, 16363).address() + 0x12);
 		}
 	};
 

@@ -20,12 +20,19 @@ void RichPresence::Load()
 	defaultExteriorIcon = ini.GetValue("Default", "DefaultExteriorIcon", "grove");
 	defaultInteriorIcon = ini.GetValue("Default", "DefaultInteriorIcon", "settlement");
 
+	buttonLabel1 = ini.GetValue("Default", "ButtonLabel1", "");
+	buttonUrl1 = ini.GetValue("Default", "ButtonUrl1", "https://www.nexusmods.com/skyrimspecialedition/mods/84847");
+	buttonLabel2 = ini.GetValue("Default", "ButtonLabel2", "");
+	buttonUrl2 = ini.GetValue("Default", "ButtonUrl2", "");
+
 	skipUnbound = ini.GetBoolValue("Options", "SkipUnbound", false);
 	alwaysUpdateMarker = ini.GetBoolValue("Options", "AlwaysUpdateMarker", true);
 	showPlayerName = ini.GetBoolValue("Options", "ShowPlayerName", false);
 	showNotifications = ini.GetBoolValue("Options", "ShowNotifications", false);
 	markerMinDistance = (float)ini.GetDoubleValue("Options", "MarkerMinDistance", 16384);
 	messageDuration = (int)ini.GetLongValue("Options", "MessageDuration", 5);
+	showStats = ini.GetBoolValue("Options", "ShowStats", true);
+	statsDuration = (int)ini.GetLongValue("Options", "StatsDuration", 2);
 }
 
 bool PlayerIsInInterior()
@@ -327,7 +334,7 @@ void RichPresence::UpdateFlavour()
 			flavour = "Journal Menu";
 		}
 		else if (ui->IsMenuOpen(RE::LevelUpMenu::MENU_NAME)) {
-			flavour = "LevelUp Menu";
+			flavour = "Level-Up Menu";
 		}
 		else if (ui->IsMenuOpen(RE::LockpickingMenu::MENU_NAME)) {
 			bool named = false;
@@ -539,12 +546,13 @@ void RichPresence::Init()
 	handlers.ready = HandleDiscordReady;
 	handlers.errored = HandleDiscordError;
 	handlers.disconnected = HandleDiscordDisconnected;
-	Discord_Initialize(applicationID.c_str(), &handlers, 1, steamAppID);
+	Discord_Initialize(L"Data\\SKSE\\Plugins\\discord-rpc\\discord-rpc.dll", applicationID.c_str(), &handlers, 1, steamAppID);
 	logger::info("Discord RPC Initialised");
 }
 
 void RichPresence::Update()
 {
+	static float delay = 0;
 	if (delay <= 0) {
 		std::unique_lock<std::shared_mutex> lockF(flavourLock, std::try_to_lock);
 		std::unique_lock<std::shared_mutex> lockM(markerLock, std::try_to_lock);
@@ -587,6 +595,50 @@ void RichPresence::Update()
 			discord_presence.state = flavour.c_str();
 			if (!mainMenu && dataLoaded && (skipUnbound || Skyrim_UnboundQuest->IsCompleted())) {
 				discord_presence.details = details.c_str();
+				if (showStats) {
+					std::lock_guard<std::shared_mutex> lockS(statsLock);
+					std::unordered_map<std::string, std::int32_t> stats;
+					static int ticker = 0;
+					if (ticker < 0) {
+						for (auto& statName : statNames)
+						{
+							int value = 0;
+							RE::BSFixedString fixedStr = statName;
+							if (MiscStatManager_QueryStat(fixedStr, value) && value)
+							{
+								stats.insert({ statName , value });
+							}
+						}
+
+						if (auto statsSize = stats.size())
+						{
+							static int statsIndex = 0;
+							statsIndex++;
+							if (statsIndex >= statsSize) {
+								statsIndex = 0;
+							}
+							int index = 0;
+							for (auto& stat : stats)
+							{
+								if (index == statsIndex)
+								{
+									statsButton = std::format("{}: {}", stat.first, stat.second);
+									ticker = statsDuration;
+									break;
+								}
+								index++;
+							}
+						}
+					}
+					else {
+						ticker--;
+					}
+
+					if (!statsButton.empty())
+					{
+						discord_presence.buttonLabel[0] = statsButton.c_str();
+					}
+				}
 			}
 
 			static auto timer = time(nullptr);
@@ -602,6 +654,26 @@ void RichPresence::Update()
 			discord_presence.largeImageText = largeImageText.c_str();
 			discord_presence.smallImageKey = smallImageKey.c_str();
 			discord_presence.smallImageText = smallImageText.c_str();
+
+			if (!discord_presence.buttonLabel[0] && !buttonLabel1.empty())
+			{
+				discord_presence.buttonLabel[0] = buttonLabel1.c_str();
+			}
+
+			if (discord_presence.buttonLabel[0])
+			{
+				discord_presence.buttonUrl[0] = buttonUrl1.c_str();
+			}
+
+			if (!buttonLabel2.empty())
+			{
+				discord_presence.buttonLabel[1] = buttonLabel2.c_str();
+			}
+
+			if (discord_presence.buttonLabel[1])
+			{
+				discord_presence.buttonUrl[1] = buttonUrl2.c_str();
+			}
 
 			if (messageTimer > 0 && !lastMessage.empty())
 			{

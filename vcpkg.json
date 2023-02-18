@@ -6,6 +6,7 @@
   "dependencies": [
     "commonlibsse-ng",
     "simpleini",
-    "magic-enum"
+    "magic-enum",
+    "rapidjson"
   ]
 }

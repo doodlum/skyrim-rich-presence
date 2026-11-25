@@ -28,6 +28,13 @@
 
 using namespace std::literals;
 
+#ifndef DLLEXPORT
+#	define DLLEXPORT __declspec(dllexport)
+#endif
+#ifndef SKSEAPI
+#	define SKSEAPI __cdecl
+#endif
+
 namespace stl
 {
 	using namespace SKSE::stl;

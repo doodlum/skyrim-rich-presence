@@ -1,0 +1,33 @@
+name: Build
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up vcpkg
+        shell: cmd
+        run: |
+          git clone https://github.com/microsoft/vcpkg C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Configure
+        shell: cmd
+        env:
+          VCPKG_ROOT: C:\vcpkg
+        run: cmake -S . --preset=FLATRIM
+
+      - name: Build
+        shell: cmd
+        run: cmake --build build --config Release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiscordRichPresence
+          path: |
+            build/Release/*.dll
+            build/release/*.dll

@@ -23,11 +23,12 @@ jobs:
 
       - name: Build
         shell: cmd
-        run: cmake --build build --config Release
+        run: |
+          cmake --build build --config Release --verbose
+          if errorlevel 1 exit /b 1
 
       - uses: actions/upload-artifact@v4
         with:
           name: DiscordRichPresence
-          path: |
-            build/Release/*.dll
-            build/release/*.dll
+          path: build/**/*.dll
+          if-no-files-found: error

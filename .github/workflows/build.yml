@@ -14,16 +14,35 @@ jobs:
         run: |
           git clone https://github.com/microsoft/vcpkg C:\vcpkg
           C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
-
+          
       - name: Configure
-        shell: cmd
+        shell: pwsh
         env:
           VCPKG_ROOT: C:\vcpkg
         run: |
-          cmake --preset=FLATRIM --debug-output --log-level=VERBOSE > configure.log 2>&1
-          set "CMAKE_EXIT=%ERRORLEVEL%"
-          type configure.log
-          if not "%CMAKE_EXIT%"=="0" exit /b %CMAKE_EXIT%
+          Write-Host "=== DIAGNOSTICS ==="
+          Write-Host "CMake version:"
+          cmake --version
+
+          Write-Host "=== PRESETS ==="
+          cmake --list-presets
+
+          Write-Host "=== CONFIGURE ==="
+          cmake --preset FLATRIM --debug-output --log-level=VERBOSE 2>&1 | Tee-Object -FilePath configure.log
+
+          $result = $LASTEXITCODE
+
+          Write-Host "=== CMAKE EXIT CODE: $result ==="
+
+          exit $result
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-Diagnostics
+          path: configure.log
+          if-no-files-found: warn
 
       - name: Build
         shell: cmd

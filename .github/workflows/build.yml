@@ -19,7 +19,11 @@ jobs:
         shell: cmd
         env:
           VCPKG_ROOT: C:\vcpkg
-        run: cmake -S . --preset=FLATRIM
+        run: |
+          cmake --preset=FLATRIM --debug-output --log-level=VERBOSE > configure.log 2>&1
+          set "CMAKE_EXIT=%ERRORLEVEL%"
+          type configure.log
+          if not "%CMAKE_EXIT%"=="0" exit /b %CMAKE_EXIT%
 
       - name: Build
         shell: cmd

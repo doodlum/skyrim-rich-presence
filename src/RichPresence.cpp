@@ -466,7 +466,7 @@ void RichPresence::UpdateFlavour()
 			}
 
 			if (!mounted) {
-				if (player->IsDead()) {
+				if (player->IsDead() && player->AsActorValueOwner()->GetActorValue(RE::ActorValue::kHealth) <= 0.0f) {
 					flavour = "Died";
 				}
 				else if (player->IsInRagdollState()) {

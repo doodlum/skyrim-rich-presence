@@ -14,6 +14,8 @@ static void MessageHandler(SKSE::MessagingInterface::Message* message)
 
 void Load()
 {
+	SKSE::AllocTrampoline(128);   // neu: genug Platz für alle Hooks auf einmal
+	
 	auto messaging = SKSE::GetMessagingInterface();
 	messaging->RegisterListener("SKSE", MessageHandler);
 	RichPresence::InstallHooks();

@@ -1,9 +1,10 @@
 set(CommonLibPath "${CMAKE_SOURCE_DIR}/extern/CommonLibSSE-NG" CACHE PATH "Path to CommonLibSSE-NG")
 set(COMMONLIB_PREBUILT ON CACHE BOOL "Use prebuilt CommonLibSSE-NG" FORCE)
 set(COMMONLIB_PREBUILT_MULTICONFIG ON CACHE BOOL "Use prebuilt CommonLibSSE-NG with multi-config generators" FORCE)
-set(ENABLE_SKYRIM_SE ON CACHE BOOL "Enable Skyrim SE support" FORCE)
-set(ENABLE_SKYRIM_AE ON CACHE BOOL "Enable Skyrim AE support" FORCE)
-set(ENABLE_SKYRIM_VR ON CACHE BOOL "Enable Skyrim VR support" FORCE)
+set(BUILD_TESTS OFF CACHE BOOL "Disable CommonLibSSE-NG tests" FORCE)
+option(ENABLE_SKYRIM_SE "Enable Skyrim SE support" ON)
+option(ENABLE_SKYRIM_AE "Enable Skyrim AE support" ON)
+option(ENABLE_SKYRIM_VR "Enable Skyrim VR support" OFF)
 
 option(BUILD_SKYRIM "Build for Skyrim" OFF)
 option(BUILD_FALLOUT4 "Build for Fallout 4" OFF)

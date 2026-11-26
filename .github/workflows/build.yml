@@ -1,0 +1,64 @@
+name: Build
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Update CommonLibSSE-NG
+        shell: cmd
+        run: |
+          git -C extern/CommonLibSSE-NG fetch origin tag v16.12.0 --no-tags
+          git -C extern/CommonLibSSE-NG checkout v16.12.0
+          git -C extern/CommonLibSSE-NG submodule update --init --recursive
+
+      - name: Set up vcpkg
+        shell: cmd
+        run: |
+          git clone https://github.com/microsoft/vcpkg C:\vcpkg
+          C:\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+          
+      - name: Configure
+        shell: pwsh
+        env:
+          VCPKG_ROOT: C:\vcpkg
+        run: |
+          Write-Host "=== DIAGNOSTICS ==="
+          Write-Host "CMake version:"
+          cmake --version
+
+          Write-Host "=== PRESETS ==="
+          cmake --list-presets
+
+          Write-Host "=== CONFIGURE ==="
+          cmake --preset FLATRIM --debug-output --log-level=VERBOSE 2>&1 | Tee-Object -FilePath configure.log
+
+          $result = $LASTEXITCODE
+
+          Write-Host "=== CMAKE EXIT CODE: $result ==="
+
+          exit $result
+
+      - name: Upload diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Build-Diagnostics
+          path: configure.log
+          if-no-files-found: warn
+
+      - name: Build
+        shell: cmd
+        run: |
+          cmake --build build --config Release --verbose
+          if errorlevel 1 exit /b 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DiscordRichPresence
+          path: build/**/*.dll
+          if-no-files-found: error

@@ -7,6 +7,7 @@
     "simpleini",
     "magic-enum",
     "rapidjson",
+    "rapidcsv",
     {
       "name": "directxmath",
       "version>=": "2025-04-03"
@@ -22,7 +23,8 @@
     {
       "name": "spdlog",
       "version>=": "1.16.0"
-    }
+    },
+    "xbyak"
   ],
   "builtin-baseline": "ee12231b20c95013c6638d845d04c91559a1d1ff"
 }
